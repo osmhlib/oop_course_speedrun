@@ -1,91 +1,165 @@
-﻿// базовий клас - звичайний вантаж
-public class Parcel
-{
-    public string SenderName { get; set; }
-    public string RecipientAddress { get; set; }
-    public double WeightKg { get; set; }
-    public decimal BasePrice { get; set; }
-}
+﻿using System;
+using System.Collections.Generic; // додано для використання списків
 
-// успадкований клас - крихкий вантаж
-public class FragileParcel : Parcel
+namespace LogisticsApp
 {
-    public string MaterialType { get; set; }
-    public bool HasInsurance { get; set; }
-}
-
-public class DeliveryCalculatorService
-{
-    // приватні змінні
-    private readonly decimal _pricePerKg = 50.0m;
-    private readonly decimal _fragileCoefficient = 1.5m; // +50% за крихкість
-    private readonly decimal _insuranceCost = 200.0m;
-
-    // метод, який працює з базовим класом
-    public void PrintShippingLabel(Parcel parcel)
+    // частина 1: моделі даних
+    // базовий клас
+    public class Parcel
     {
-        Console.WriteLine("--- Shipping Label ---");
-        Console.WriteLine($"From: {parcel.SenderName}");
-        Console.WriteLine($"To: {parcel.RecipientAddress}");
-        Console.WriteLine($"Weight: {parcel.WeightKg} kg");
-
-        // виклик іншого методу сервісу для розрахунку
-        decimal cost = CalculateCost(parcel);
-        Console.WriteLine($"Total Delivery Cost: {cost} UAH");
-        Console.WriteLine("----------------------");
+        public string Id { get; set; }
+        public string Sender { get; set; }
+        public string Receiver { get; set; }
+        public double WeightKg { get; set; }
     }
 
-    // логіка розрахунку ціни
-    public decimal CalculateCost(Parcel parcel)
+    // тип 1: крихкий вантаж
+    public class FragileParcel : Parcel
     {
-        decimal total = parcel.BasePrice + (decimal)parcel.WeightKg * _pricePerKg;
+        public string Material { get; set; }
+        public bool HasInsurance { get; set; }
+    }
 
-        if (parcel is FragileParcel fragile)
+    // тип 2: термінова посилка
+    public class ExpressParcel : Parcel
+    {
+        public int DeliveryTimeHours { get; set; }
+        public bool IsWeekendDelivery { get; set; }
+    }
+
+    // тип 3: міжнародна посилка
+    public class InternationalParcel : Parcel
+    {
+        public string DestinationCountry { get; set; }
+        public decimal CustomsFee { get; set; }
+    }
+
+    // частина 2: сервіси
+    public class PricingService
+    {
+        private readonly decimal _baseRatePerKg = 10.0m;
+
+        // коефіцієнти для різних типів
+        private readonly decimal _fragileCoefficient = 1.5m;
+        private readonly decimal _insuranceCost = 50.0m;
+        private readonly decimal _expressMultiplier = 2.0m;
+        private readonly decimal _internationalFlatFee = 40.0m;
+
+        public decimal CalculatePrice(Parcel parcel)
         {
-            total *= _fragileCoefficient;
+            decimal cost = (decimal)parcel.WeightKg * _baseRatePerKg;
 
-            if (fragile.HasInsurance)
+            switch (parcel)
             {
-                total += _insuranceCost;
+                case FragileParcel fragile:
+                    cost *= _fragileCoefficient;
+                    if (fragile.HasInsurance) cost += _insuranceCost;
+                    break;
+
+                case ExpressParcel express:
+                    cost *= _expressMultiplier;
+                    if (express.IsWeekendDelivery) cost += 20.0m;
+                    break;
+
+                case InternationalParcel international:
+                    cost += _internationalFlatFee;
+                    cost += international.CustomsFee;
+                    break;
+
+                // звичайна посилка
+                case Parcel _:
+                    break;
+            }
+
+            return cost;
+        }
+    }
+
+    public class LogisticsService
+    {
+        private readonly PricingService _pricingService;
+
+        public LogisticsService()
+        {
+            _pricingService = new PricingService();
+        }
+
+        // метод тепер може приймати список посилок для зручності
+        public void ProcessBatch(List<Parcel> parcels)
+        {
+            foreach (var p in parcels)
+            {
+                ProcessShipment(p);
             }
         }
 
-        return total;
+        private void ProcessShipment(Parcel parcel)
+        {
+            decimal price = _pricingService.CalculatePrice(parcel);
+            PrintLabel(parcel, price);
+        }
+
+        private void PrintLabel(Parcel parcel, decimal price)
+        {
+            Console.WriteLine("--- LABEL ---");
+            Console.WriteLine($"ID: {parcel.Id} | Type: {parcel.GetType().Name}");
+            Console.WriteLine($"Route: {parcel.Sender} -> {parcel.Receiver}");
+
+            // специфічний вивід для кожного типу
+            switch (parcel)
+            {
+                case FragileParcel f:
+                    Console.WriteLine($"[!] HANDLE WITH CARE: {f.Material.ToUpper()}");
+                    break;
+                case ExpressParcel e:
+                    Console.WriteLine($"[>>] EXPRESS: {e.DeliveryTimeHours}h");
+                    break;
+                case InternationalParcel i:
+                    Console.WriteLine($"[?] CUSTOMS: {i.DestinationCountry}");
+                    break;
+            }
+
+            Console.WriteLine($"Price: ${price}");
+            Console.WriteLine("-------------\n");
+        }
     }
-}
 
-class Program
-{
-    static void Main()
+    // частина 3: main
+    class Program
     {
-        // створюємо сервіс
-        DeliveryCalculatorService service = new DeliveryCalculatorService();
-
-        // створюємо звичайну модель (батьківський клас)
-        Parcel simpleBox = new Parcel
+        static void Main()
         {
-            SenderName = "Glib",
-            RecipientAddress = "Kyiv, Khreshchatyk str, 1",
-            WeightKg = 2.0,
-            BasePrice = 100
-        };
+            LogisticsService logistics = new LogisticsService();
 
-        // створюємо модель з успадкуванням (дочірній клас)
-        FragileParcel vase = new FragileParcel
-        {
-            SenderName = "City Museum",
-            RecipientAddress = "Lviv, Rynok Square, 10",
-            WeightKg = 5.0,
-            BasePrice = 100,
-            MaterialType = "Glass", // специфічне поле
-            HasInsurance = true     // специфічне поле
-        };
+            // створюємо список різних посилок
+            // ми можемо покласти різні класи в один список типу List<Parcel>
+            var batch = new List<Parcel>
+            {
+                new Parcel
+                {
+                    Id = "STD-1", Sender = "Kyiv", Receiver = "Poltava", WeightKg = 5
+                },
+                new FragileParcel
+                {
+                    Id = "FRG-2", Sender = "Lviv", Receiver = "Kyiv", WeightKg = 2,
+                    Material = "Glass", HasInsurance = true
+                },
+                new ExpressParcel
+                {
+                    Id = "EXP-3", Sender = "Dnipro", Receiver = "Odesa", WeightKg = 1,
+                    DeliveryTimeHours = 12, IsWeekendDelivery = false
+                },
+                new InternationalParcel
+                {
+                    Id = "INT-4", Sender = "Uzhhorod", Receiver = "Prague", WeightKg = 10,
+                    DestinationCountry = "Czechia", CustomsFee = 12.5m
+                }
+            };
 
-        // сервіс обробляє обидва об'єкти
-        Console.WriteLine("Processing standard parcel:");
-        service.PrintShippingLabel(simpleBox);
+            Console.WriteLine("Starting batch processing...\n");
 
-        Console.WriteLine("\nProcessing fragile parcel:");
-        service.PrintShippingLabel(vase);
+            // відправляємо весь список на обробку
+            logistics.ProcessBatch(batch);
+        }
     }
 }
