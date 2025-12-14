@@ -12,6 +12,12 @@ namespace CoffeeShopSystem
         // конструктор для зручності
         public MenuItem(string name, decimal price)
         {
+            // валідація: ціна не може бути від'ємною
+            // це приклад захисту даних на етапі створення
+            if (price < 0)
+            {
+                throw new ArgumentException($"price cannot be negative for '{name}'");
+            }
             Name = name;
             Price = price;
         }
@@ -23,6 +29,28 @@ namespace CoffeeShopSystem
         public virtual void Prepare()
         {
             Console.WriteLine($"[system] starting preparation for {Name}...");
+        }
+
+        // --- нові методи для лабораторної 2 ---
+
+        // віртуальний метод подачі
+        public virtual void Serve()
+        {
+            Console.WriteLine($"[waiter] serving {Name} to the table.");
+        }
+
+        // віртуальний метод знижки з валідацією
+        public virtual void ApplyDiscount(decimal percentage)
+        {
+            // перевірка на коректність відсотка
+            if (percentage < 0 || percentage > 50)
+            {
+                throw new ArgumentOutOfRangeException(nameof(percentage), "discount must be between 0% and 50%");
+            }
+
+            decimal discountAmount = Price * (percentage / 100);
+            Price -= discountAmount;
+            Console.WriteLine($"[promo] discount {percentage}% applied. new price: ${Price:F2}");
         }
     }
 
@@ -61,6 +89,13 @@ namespace CoffeeShopSystem
 
             Console.WriteLine($"[barista] {Name} is ready!");
         }
+
+        // перевизначення методу подачі (нове)
+        public override void Serve()
+        {
+            string container = IsIced ? "transparent plastic cup" : "ceramic mug";
+            Console.WriteLine($"[waiter] placing {Name} in a {container}.");
+        }
     }
 
     // клас-нащадок 2: випічка
@@ -86,7 +121,7 @@ namespace CoffeeShopSystem
         // перевизначення віртуального методу
         public override void Prepare()
         {
-            // спочатку виконується код з базового класу MenuItem
+            // спочатку виконується код з базового класу menuitem
             base.Prepare();
 
             if (NeedsWarming)
@@ -100,33 +135,143 @@ namespace CoffeeShopSystem
 
             Console.WriteLine($"[kitchen] {Name} is served.");
         }
+
+        // перевизначення знижки (нове)
+        // для випічки дозволяємо більшу знижку, ніж стандартні 50%
+        public override void ApplyDiscount(decimal percentage)
+        {
+            if (percentage < 0 || percentage > 90)
+            {
+                throw new ArgumentOutOfRangeException("pastry discount can be up to 90%");
+            }
+
+            // логіка розрахунку така сама, тому копіюємо формулу
+            decimal discountAmount = Price * (percentage / 100);
+            Price -= discountAmount;
+            Console.WriteLine($"[promo] pastry sale! {percentage}% off. new price: ${Price:F2}");
+        }
+    }
+
+    // --- новий клас для лабораторної 2 ---
+
+    // клас-нащадок 3: смузі
+    public class Smoothie : MenuItem
+    {
+        public List<string> Ingredients { get; set; }
+
+        public Smoothie(string name, decimal price, List<string> ingredients)
+            : base(name, price)
+        {
+            Ingredients = ingredients;
+        }
+
+        public override void DisplayInfo()
+        {
+            string list = Ingredients != null ? string.Join(", ", Ingredients) : "None";
+            Console.WriteLine($"ITEM: {Name} (Smoothie)");
+            Console.WriteLine($"Price: ${Price} | Mix: {list}");
+        }
+
+        public override void Prepare()
+        {
+            // перевірка: не можна зробити смузі без інгредієнтів
+            if (Ingredients == null || Ingredients.Count == 0)
+            {
+                throw new InvalidOperationException("cannot blend smoothie without ingredients");
+            }
+            Console.WriteLine($"[blender] mixing ingredients: {string.Join(" + ", Ingredients)}...");
+        }
+
+        public override void Serve()
+        {
+            Console.WriteLine($"[waiter] serving {Name} with a thick straw.");
+        }
     }
 
     class Program
     {
         static void Main()
         {
-            // створення колекції об'єктів базового типу
-            List<MenuItem> order = new List<MenuItem>
-            {
-                new Coffee("Latte", 4.50m, "Arabica", false),
-                new Coffee("Cold Brew", 5.00m, "Blend", true),
-                new Pastry("Croissant", 3.00m, 250, true),
-                new Pastry("Cheesecake", 6.50m, 400, false)
-            };
+            List<MenuItem> order = new List<MenuItem>();
 
-            Console.WriteLine("--- PROCESSING ORDER ---\n");
+            Console.WriteLine("--- CREATING ORDER ---\n");
+
+            // блок try-catch для безпечного додавання товарів
+            try
+            {
+                order.Add(new Coffee("Latte", 4.50m, "Arabica", false));
+                order.Add(new Pastry("Croissant", 3.00m, 250, true));
+
+                // додавання нового типу товару
+                order.Add(new Smoothie("Berry Mix", 6.00m, new List<string> { "Strawberry", "Banana", "Milk" }));
+
+                // спроба створити товар з помилкою (від'ємна ціна)
+                // розкоментуй рядок нижче, щоб перевірити роботу захисту
+                // order.Add(new Coffee("Error Coffee", -5.00m, "None", false));
+
+                // додавання товару, який викличе помилку пізніше (при приготуванні)
+                order.Add(new Smoothie("Empty Glass", 5.00m, new List<string>()));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] failed to create item: {ex.Message}");
+            }
+
+            Console.WriteLine("\n--- PROCESSING ORDER ---\n");
 
             // перебір колекції
             foreach (var item in order)
             {
-                // 1. виводимо інфо
-                item.DisplayInfo();
+                Console.WriteLine($"> Processing item: {item.Name}");
 
-                // 2. готуємо
-                item.Prepare();
+                // окремий блок try-catch для кожного замовлення
+                // щоб помилка в одному товарі не зупиняла всю чергу
+                try
+                {
+                    // 1. виводимо інфо
+                    item.DisplayInfo();
 
-                Console.WriteLine("------------------------");
+                    // 2. готуємо (тут може виникнути помилка для Empty Glass)
+                    item.Prepare();
+
+                    // 3. застосовуємо знижку (нове)
+                    // спробуємо дати 60% знижки
+                    // для кави це викличе помилку (ліміт 50%)
+                    // для випічки це спрацює (ліміт 90%)
+                    if (item is Pastry)
+                    {
+                        item.ApplyDiscount(60);
+                    }
+                    else
+                    {
+                        // даємо безпечну знижку для інших
+                        item.ApplyDiscount(10);
+                    }
+
+                    // 4. подаємо (нове)
+                    item.Serve();
+
+                    Console.WriteLine("-> Status: Completed");
+                }
+                catch (ArgumentOutOfRangeException ex)
+                {
+                    // помилка зі знижкою
+                    Console.WriteLine($"[!] DISCOUNT ERROR: {ex.Message}");
+                }
+                catch (InvalidOperationException ex)
+                {
+                    // помилка при приготуванні (логічна)
+                    Console.WriteLine($"[!] KITCHEN ERROR: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    // будь-які інші помилки
+                    Console.WriteLine($"[!] UNKNOWN ERROR: {ex.Message}");
+                }
+                finally
+                {
+                    Console.WriteLine("------------------------");
+                }
             }
         }
     }
