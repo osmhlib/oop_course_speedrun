@@ -5,7 +5,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <StartupObject>CoffeeShopDelegates.Program</StartupObject>
+    <StartupObject>CoffeeShopEvents.Program</StartupObject>
   </PropertyGroup>
 
 </Project>
